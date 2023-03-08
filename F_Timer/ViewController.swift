@@ -6,6 +6,7 @@
 //
 
 import UIKit
+import AudioToolbox
 
 enum TimerStatus {
 	case start
@@ -19,7 +20,8 @@ class ViewController: UIViewController {
 	@IBOutlet weak var datePicker: UIDatePicker!
 	@IBOutlet weak var cancelButton: UIButton!
 	@IBOutlet weak var toggleButton: UIButton!
-
+	@IBOutlet weak var imgView: UIImageView!
+	
 	var duration = 60
 	var timerStatus: TimerStatus = .end
 	var timer: DispatchSourceTimer?
@@ -50,11 +52,26 @@ class ViewController: UIViewController {
 			self.timer = DispatchSource.makeTimerSource(flags: [], queue: .main)
 			self.timer?.schedule(deadline: .now(), repeating: 1)
 			self.timer?.setEventHandler(handler: { [weak self] in
-				self?.currentSeconds -= 1
-				debugPrint(self?.currentSeconds ?? 0)
+				guard let self = self else { return } // 강한 참조로 설정
+				self.currentSeconds -= 1
+				let hour = self.currentSeconds / 3600
+				let minutes = (self.currentSeconds % 3600) / 60
+				let seconds = (self.currentSeconds % 3600) % 60
+				
+				self.timerLabel.text = String(format: "%02d:%02d:%02d", hour, minutes, seconds)
+				self.progressView.progress = Float(self.currentSeconds) / Float(self.duration)
+				
+				UIView.animate(withDuration: 0.5, delay: 0, animations: {
+					self.imgView.transform = CGAffineTransform(rotationAngle: .pi)
+				})
+				UIView.animate(withDuration: 0.5, delay: 0.5, animations: {
+					self.imgView.transform = CGAffineTransform(rotationAngle: .pi * 2)
+				})
+				
 
-				if self?.currentSeconds ?? 0 <= 0 {
-					self?.stopTimer()
+				if self.currentSeconds <= 0 {
+					self.stopTimer()
+					AudioServicesPlaySystemSound(1005)
 				}
 			})
 			
@@ -70,7 +87,13 @@ class ViewController: UIViewController {
 		self.timerStatus = .end
 		self.cancelButton.isEnabled = false
 		self.toggleButton.isSelected = false
-		self.setTimerInfoViewVisible(isHidden: true)
+		//self.setTimerInfoViewVisible(isHidden: true)
+		UIView.animate(withDuration: 0.2, animations: {
+			self.timerLabel.alpha = 0
+			self.progressView.alpha = 0
+			self.datePicker.alpha = 1
+			self.imgView.transform = .identity
+		})
 		self.timer?.cancel()
 		self.timer = nil // 메모리에서 해제
 	}
@@ -100,9 +123,15 @@ class ViewController: UIViewController {
 			self.timerStatus = .pause
 			self.toggleButton.isSelected = false
 			self.timer?.suspend() // ⛔️ suspend된 timer에 nil을 넣으면 런타임에러 발생 (일시정지시키고 취소버튼 눌렀을 경우)
+			self.imgView.transform = .identity
 		case .end: // 취소상태 일 때
 			self.timerStatus = .start
-			self.setTimerInfoViewVisible(isHidden: false)
+			//self.setTimerInfoViewVisible(isHidden: false)
+			UIView.animate(withDuration: 0.2, animations: {
+				self.timerLabel.alpha = 1
+				self.progressView.alpha = 1
+				self.datePicker.alpha = 0
+			})
 			self.toggleButton.isSelected = true
 			self.cancelButton.isEnabled = true
 			self.currentSeconds = self.duration
